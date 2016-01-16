@@ -176,13 +176,6 @@ namespace libtorrent
 		blends the results into the params object (unless deprecated functions \
 		are disabled)
 
-#ifndef TORRENT_NO_DEPRECATE
-		if (params.tracker_url)
-		{
-			p->trackers.push_back(params.tracker_url);
-			p->tracker_url = NULL;
-		}
-#endif
 		TORRENT_ASYNC_CALL1(async_add_torrent, p);
 	}
 
@@ -222,11 +215,14 @@ namespace libtorrent
 		, void* userdata)
 	{
 		add_torrent_params p(sc);
-		p.tracker_url = tracker_url;
+		p.trackers.push_back(tracker_url);
 		p.info_hash = info_hash;
 		p.save_path = save_path;
 		p.storage_mode = storage_mode;
-		p.paused = paused;
+
+		if (paused) p.flags |= add_torrent_params::flag_paused;
+		else p.flags &= ~add_torrent_params::flag_paused;
+
 		p.userdata = userdata;
 		p.name = name;
 		if (resume_data.type() != entry::undefined_t)

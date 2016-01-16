@@ -35,7 +35,10 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include <string>
 #include <vector>
+
+#include "libtorrent/aux_/disable_warnings_push.hpp"
 #include <boost/shared_ptr.hpp>
+#include "libtorrent/aux_/disable_warnings_pop.hpp"
 
 #include "libtorrent/storage_defs.hpp"
 #include "libtorrent/peer_id.hpp" // sha1_hash
@@ -83,8 +86,18 @@ namespace libtorrent
 			, max_connections(-1)
 			, upload_limit(-1)
 			, download_limit(-1)
-		{
-		}
+			, total_uploaded(0)
+			, total_downloaded(0)
+			, active_time(0)
+			, finished_time(0)
+			, seeding_time(0)
+			, added_time(0)
+			, completed_time(0)
+			, last_seen_complete(0)
+			, num_complete(-1)
+			, num_incomplete(-1)
+			, num_downloaded(-1)
+		{}
 
 		// values for the ``flags`` field
 		enum flags_t
@@ -193,6 +206,8 @@ namespace libtorrent
 			// replaced by any trackers in the resume data. The default behavior is
 			// to have the resume data override the .torrent file _and_ the
 			// trackers added in add_torrent_params.
+//#error this needs to change slightly. Should trackers be extracted from the \
+			.torrent file on the client side? when in that case?
 			flag_merge_resume_trackers = 0x100,
 
 			// on by default and means that this torrent will be part of state
@@ -230,6 +245,8 @@ namespace libtorrent
 			// add_torrent_params are also replaced. The default behavior is to
 			// have any web seeds in the resume data take precedence over whatever
 			// is passed in here as well as the .torrent file.
+//#error this needs to change slightly. Should web seeds be extracted from the \
+			.torrent file on the client side? when in that case?
 			flag_merge_resume_http_seeds = 0x2000,
 
 			// the stop when ready flag. Setting this flag is equivalent to calling
@@ -255,8 +272,8 @@ namespace libtorrent
 		// the tiers the URLs in ``trackers`` belong to. Trackers belonging to
 		// different tiers may be treated differently, as defined by the multi
 		// tracker extension. This is optional, if not specified trackers are
-		// assumed to be part of tier 0
-#error support this in torrent constructor
+		// assumed to be part of tier 0, or whichever the last tier was as
+		// iterating over the trackers.
 		std::vector<int> tracker_tiers;
 
 		// url seeds to be added to the torrent (`BEP 17`_).
@@ -274,6 +291,9 @@ namespace libtorrent
 		// 	paths. This means they must use backslashes as directory separators
 		// 	and may not contain the special directories "." or "..".
 		std::string save_path;
+
+#error do we still need this? what's left in the resume data that isn't parsed \
+		out into add_torrent_params? should it be moved to add_torrent_params?
 
 		// The optional parameter, ``resume_data`` can be given if up to date
 		// fast-resume data is available. The fast-resume data can be acquired
@@ -368,7 +388,6 @@ namespace libtorrent
 		int upload_limit;
 		int download_limit;
 
-#error update torrent.cpp to take all these into account
 		// the total number of bytes uploaded and downloaded by this torrent so
 		// far.
 		boost::int64_t total_uploaded;
@@ -376,9 +395,38 @@ namespace libtorrent
 
 		// the numeber of seconds this torrent has spent in started, finished and
 		// seeding state so far, respectively.
-		int m_active_time;
+		int active_time;
 		int finished_time;
 		int seeding_time;
+
+		// if set to a non-zero value, this is the posix time of when this torrent
+		// was first added, including previous runs/sessions. If set to zero, the
+		// internal added_time will be set to the time of when add_torrent() is
+		// called.
+		time_t added_time;
+		time_t completed_time;
+
+		// if set to non-zero, initializes the time (expressed in posix time) when
+		// we last saw a seed or peers that together formed a complete copy of the
+		// torrent. If left set to zero, the internal counterpart to this field
+		// will be updated when we see a seed or a distributed copies >= 1.0.
+		time_t last_seen_complete;
+
+		// these field can be used to initialize the torrent's cached scrape data.
+		// The scrape data is high level metadata about the current state of the
+		// swarm, as returned by the tracker (either when announcing to it or by
+		// sending a specific scrape request). ``num_complete`` is the number of
+		// peers in the swarm that are seeds, or have every piece in the torrent.
+		// ``num_inomplete`` is the number of peers in the swarm that do not have
+		// every piece. ``num_downloaded`` is the number of times the torrent has
+		// been downloaded (not initiated, but the number of times a download has
+		// completed).
+		// 
+		// Leaving any of these values set to -1 indicates we don't know, or we
+		// have not received any scrape data.
+		int num_complete;
+		int num_incomplete;
+		int num_downloaded;
 	};
 }
 

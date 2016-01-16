@@ -41,7 +41,10 @@ namespace libtorrent
 	struct add_torrent_params;
 	struct bdecode_node;
 
-#error document these functions
+	// these functions are used to parse resume data and populate the appropriate
+	// fields in an add_torrent_param object. This object can then be used to add
+	// the actual torrent_info object to and pass to session::add_torrent() or
+	// session::async_add_torrent()
 	TORRENT_EXPORT add_torrent_params read_resume_data(bdecode_node const& rd
 		, error_code& ec);
 	TORRENT_EXPORT add_torrent_params read_resume_data(char const* buffer

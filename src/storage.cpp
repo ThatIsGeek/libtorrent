@@ -918,9 +918,9 @@ namespace libtorrent
 		, std::vector<std::string> const* links
 		, storage_error& ec)
 	{
-		// TODO: make this more generic to not just work if files have been
-		// renamed, but also if they have been merged into a single file for instance
-		// maybe use the same format as .torrent files and reuse some code from torrent_info
+#error mapped files should be dealt with uniformly, regardless of if we're adding \
+		a file with resume data or just renaming a file of an existing torrent
+
 		bdecode_node mapped_files = rd.dict_find_list("mapped_files");
 		if (mapped_files && mapped_files.list_size() == m_files.num_files())
 		{
@@ -933,6 +933,9 @@ namespace libtorrent
 			}
 		}
 
+#error file priority should not be handled specially via resum data. Use the regular \
+		functions to set file priority.
+
 		bdecode_node file_priority = rd.dict_find_list("file_priority");
 		if (file_priority && file_priority.list_size()
 			== files().num_files())
@@ -941,6 +944,10 @@ namespace libtorrent
 			for (int i = 0; i < file_priority.list_size(); ++i)
 				m_file_priority[i] = boost::uint8_t(file_priority.list_int_value_at(i, 1));
 		}
+
+#error this section probable needs updating. Presumably we only want to verify that \
+		files are not smaller than we expect. And we don't want to take timestamp \
+		into account
 
 		bdecode_node file_sizes_ent = rd.dict_find_list("file sizes");
 		if (file_sizes_ent == 0)
@@ -965,6 +972,8 @@ namespace libtorrent
 			ec.operation = storage_error::check_resume;
 			return false;
 		}
+
+#error does the disk layer really need to care about which pieces we have and not?
 
 		bool seed = false;
 		bdecode_node slots = rd.dict_find_list("slots");
@@ -1030,6 +1039,9 @@ namespace libtorrent
 				ec.operation = storage_error::check_resume;
 				return false;
 			}
+
+
+#error if we ignore timestamps, can we get rid of the stat_cache?
 
 			boost::int64_t file_size = m_stat_cache.get_filesize(i);
 			time_t file_time;

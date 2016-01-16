@@ -355,6 +355,40 @@ namespace libtorrent
 			m_resume_data.reset(new resume_data_t);
 			m_resume_data->buf = p.resume_data;
 		}
+
+		int tier = 0;
+		std::vector<int>::const_iterator tier_iter = p.tracker_tiers.begin();
+		for (std::vector<std::string>::const_iterator i = p.trackers.begin()
+			, end(p.trackers.end()); i != end; ++i)
+		{
+			if (tier_iter != p.tracker_tiers.end())
+				tier = *tier_iter++;
+
+			announce_entry e(*i);
+			e.fail_limit = 0;
+			e.source = announce_entry::source_magnet_link;
+			e.tier = tier;
+			m_trackers.push_back(e);
+			m_torrent_file->add_tracker(*i, tier);
+		}
+
+		if (settings().get_bool(settings_pack::prefer_udp_trackers))
+			prioritize_udp_trackers();
+
+
+		m_total_uploaded = p.total_uploaded;
+		m_total_downloaded = p.total_downloaded;
+
+		// the numeber of seconds this torrent has spent in started, finished and
+		// seeding state so far, respectively.
+		m_active_time = p.active_time;
+		m_finished_time = p.finished_time;
+		m_seeding_time = p.seeding_time;
+
+		m_added_time = p.added_time ? p.added_time : time(0);
+		m_completed_time = p.completed_time;
+		if (m_completed_time != 0 && m_completed_time < m_added_time)
+			m_completed_time = m_added_time;
 	}
 
 	void torrent::inc_stats_counter(int c, int value)
@@ -712,6 +746,8 @@ namespace libtorrent
 	{
 		TORRENT_ASSERT(is_single_thread());
 
+#error why isn't this done in the constructor?
+
 #ifndef TORRENT_DISABLE_LOGGING
 		debug_log("creating torrent: %s max-uploads: %d max-connections: %d "
 			"upload-limit: %d download-limit: %d flags: %s%s%s%s%s%s%s%s%s%s%s%s"
@@ -763,28 +799,6 @@ namespace libtorrent
 		set_limit_impl(p.download_limit, peer_connection::download_channel, false);
 
 		if (!m_name && !m_url.empty()) m_name.reset(new std::string(m_url));
-
-#ifndef TORRENT_NO_DEPRECATE
-		if (p.tracker_url && std::strlen(p.tracker_url) > 0)
-		{
-			m_trackers.push_back(announce_entry(p.tracker_url));
-			m_trackers.back().fail_limit = 0;
-			m_trackers.back().source = announce_entry::source_magnet_link;
-			m_torrent_file->add_tracker(p.tracker_url);
-		}
-#endif
-
-		for (std::vector<std::string>::const_iterator i = p.trackers.begin()
-			, end(p.trackers.end()); i != end; ++i)
-		{
-			m_trackers.push_back(announce_entry(*i));
-			m_trackers.back().fail_limit = 0;
-			m_trackers.back().source = announce_entry::source_magnet_link;
-			m_torrent_file->add_tracker(*i);
-		}
-
-		if (settings().get_bool(settings_pack::prefer_udp_trackers))
-			prioritize_udp_trackers();
 
 		// if we don't have metadata, make this torrent pinned. The
 		// client may unpin it once we have metadata and it has had
@@ -1802,7 +1816,8 @@ namespace libtorrent
 	}
 
 	// this may not be called from a constructor because of the call to
-	// shared_from_this()
+	// shared_from_this(). It's either called when we start() the torrent, or at a
+	// later time if it's a magnet link, once the metadata is downloaded
 	void torrent::init()
 	{
 		INVARIANT_CHECK;
@@ -1877,12 +1892,6 @@ namespace libtorrent
 #endif
 				m_resume_data.reset();
 			}
-			else
-			{
-#error copying fields from add_torrent_params into torrent may need to happen \
-	in the constructor
-				read_resume_data(m_resume_data->node);
-			}
 		}
 
 #if TORRENT_USE_ASSERTS
@@ -1923,6 +1932,7 @@ namespace libtorrent
 
 		// if we've already loaded file priorities, don't load piece priorities,
 		// they will interfere.
+#error we should get the piece priority from add_torrent_params instead
 		if (!m_seed_mode && m_resume_data && m_file_priority.empty())
 		{
 			bdecode_node piece_priority = m_resume_data->node
@@ -7086,9 +7096,6 @@ namespace libtorrent
 		ret["max_connections"] = max_connections();
 		ret["max_uploads"] = max_uploads();
 		ret["paused"] = is_torrent_paused();
-		ret["announce_to_dht"] = m_announce_to_dht;
-		ret["announce_to_trackers"] = m_announce_to_trackers;
-		ret["announce_to_lsd"] = m_announce_to_lsd;
 		ret["auto_managed"] = m_auto_managed;
 
 		// piece priorities and file priorities are mutually exclusive. If there

@@ -437,6 +437,7 @@ namespace libtorrent
 			enable_outgoing_tcp,
 			enable_incoming_tcp,
 
+#error this should probably be deprecated
 			// ``ignore_resume_timestamps`` determines if the storage, when
 			// loading resume data files, should verify that the file modification
 			// time with the timestamps in the resume data. This defaults to

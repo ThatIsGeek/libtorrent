@@ -30,14 +30,26 @@ POSSIBILITY OF SUCH DAMAGE.
 
 */
 
+#include "libtorrent/aux_/disable_warnings_push.hpp"
+
+#include <boost/cstdint.hpp>
+#include <boost/bind.hpp>
+
+#include "libtorrent/aux_/disable_warnings_pop.hpp"
+
+#include "libtorrent/bdecode.hpp"
+#include "libtorrent/read_resume_data.hpp"
+#include "libtorrent/add_torrent_params.hpp"
+#include "libtorrent/announce_entry.hpp"
+
 namespace libtorrent
 {
 	namespace
 	{
-		void apply_flag(boost:uint32_t& current_flags
+		void apply_flag(boost::uint64_t& current_flags
 			, bdecode_node const& n
 			, char const* name
-			, const boost::uint32_t flag)
+			, boost::uint64_t const flag)
 		{
 			if (n.dict_find_int_value(name, -1) == -1)
 			{
@@ -60,39 +72,25 @@ namespace libtorrent
 		ret.finished_time = rd.dict_find_int_value("finished_time");
 		ret.seeding_time = rd.dict_find_int_value("seeding_time");
 
-#error add fields for this
-		last_seen_complete = rd.dict_find_int_value("last_seen_complete");
-		complete = rd.dict_find_int_value("num_complete", 0xffffff);
-		incomplete = rd.dict_find_int_value("num_incomplete", 0xffffff);
-		downloaded = rd.dict_find_int_value("num_downloaded", 0xffffff);
+		ret.last_seen_complete = rd.dict_find_int_value("last_seen_complete");
 
+		// scrape data cache
+		ret.num_complete = rd.dict_find_int_value("num_complete", -1);
+		ret.num_incomplete = rd.dict_find_int_value("num_incomplete", -1);
+		ret.num_downloaded = rd.dict_find_int_value("num_downloaded", -1);
+
+		// torrent settings
+		ret.max_uploads = rd.dict_find_int_value("max_uploads", -1);
+		ret.max_connections = rd.dict_find_int_value("max_connections", -1);
 		ret.upload_limit = rd.dict_find_int_value("upload_rate_limit", -1);
 		ret.download_limit = rd.dict_find_int_value("download_rate_limit", -1);
-		ret.max_connections = rd.dict_find_int_value("max_connections", -1);
-		ret.max_uploads = rd.dict_find_int_value("max_uploads", -1);
 
+		// torrent state
 		apply_flag(ret.flags, rd, "seed_mode", add_torrent_params::flag_seed_mode);
-		apply_flag(ret.flags, rd, "super_seeding", add_torrent_params::flag_super_Seeding);
+		apply_flag(ret.flags, rd, "super_seeding", add_torrent_params::flag_super_seeding);
 		apply_flag(ret.flags, rd, "auto_managed", add_torrent_params::flag_auto_managed);
 		apply_flag(ret.flags, rd, "sequential_download", add_torrent_params::flag_sequential_download);
 		apply_flag(ret.flags, rd, "paused", add_torrent_params::flag_paused);
-
-#error add these to add_torrent_params
-		int dht_ = rd.dict_find_int_value("announce_to_dht", -1);
-		if (dht_ != -1) m_announce_to_dht = (dht_ != 0);
-		int lsd_ = rd.dict_find_int_value("announce_to_lsd", -1);
-		if (lsd_ != -1) m_announce_to_lsd = (lsd_ != 0);
-		int track_ = rd.dict_find_int_value("announce_to_trackers", -1);
-		if (track_ != -1) m_announce_to_trackers = (track_ != 0);
-
-#error add fields for these
-		int now = m_ses.session_time();
-		int tmp = rd.dict_find_int_value("last_scrape", -1);
-		m_last_scrape = tmp == -1 ? (std::numeric_limits<boost::int16_t>::min)() : now - tmp;
-		tmp = rd.dict_find_int_value("last_download", -1);
-		m_last_download = tmp == -1 ? (std::numeric_limits<boost::int16_t>::min)() : now - tmp;
-		tmp = rd.dict_find_int_value("last_upload", -1);
-		m_last_upload = tmp == -1 ? (std::numeric_limits<boost::int16_t>::min)() : now - tmp;
 
 		ret.save_path = rd.dict_find_string_value("save_path");
 
@@ -100,7 +98,9 @@ namespace libtorrent
 		ret.uuid = rd.dict_find_string_value("uuid");
 		ret.source_feed_url = rd.dict_find_string_value("feed");
 
-#error add a field for this
+#error add a field for this. The mapping has to happen in the torrent \
+		constructor probably
+
 		bdecode_node mapped_files = rd.dict_find_list("mapped_files");
 		if (mapped_files && mapped_files.list_size() == m_torrent_file->num_files())
 		{
@@ -112,11 +112,8 @@ namespace libtorrent
 			}
 		}
 
-#error add fields for these
-		m_added_time = rd.dict_find_int_value("added_time", m_added_time);
-		m_completed_time = rd.dict_find_int_value("completed_time", m_completed_time);
-		if (m_completed_time != 0 && m_completed_time < m_added_time)
-			m_completed_time = m_added_time;
+		ret.added_time = rd.dict_find_int_value("added_time", 0);
+		ret.completed_time = rd.dict_find_int_value("completed_time", 0);
 
 		// load file priorities except if the add_torrent_param file was set to
 		// override resume data
@@ -131,7 +128,7 @@ namespace libtorrent
 				// this is suspicious, leave seed mode
 				if (ret.file_priorities[i] == 0)
 				{
-					ret.flags &= ~add_torrent_params::flags_seed_mode;
+					ret.flags &= ~add_torrent_params::flag_seed_mode;
 				}
 			}
 		}
@@ -231,7 +228,7 @@ namespace libtorrent
 			TORRENT_ASSERT(false);
 		}
 
-#error add fields for these
+#error add fields to add_torrent_params for these
 		// some sanity checking. Maybe we shouldn't be in seed mode anymore
 		bdecode_node pieces = rd.dict_find("pieces");
 		if (pieces && pieces.type() == bdecode_node::string_t
