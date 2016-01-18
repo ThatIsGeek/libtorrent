@@ -9505,14 +9505,14 @@ namespace libtorrent
 		m_last_saved_resume = m_ses.session_time();
 		m_save_resume_flags = boost::uint8_t(flags);
 		state_updated();
-/*
+
 		if (!need_loaded())
 		{
 			alerts().emplace_alert<save_resume_data_failed_alert>(get_handle()
 				, m_error);
 			return;
 		}
-
+/*
 		// storage may be NULL during shutdown
 		if (!m_storage)
 		{
